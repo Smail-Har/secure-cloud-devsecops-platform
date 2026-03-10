@@ -125,6 +125,9 @@ jobs:
       - name: Scan Docker image with Trivy
         uses: aquasecurity/trivy-action@0.30.0
         with:
+          # Pin Trivy engine version for reproducible CI and to avoid
+          # transient installer failures on newest upstream releases.
+          trivy-version: "0.56.2"
           image-ref: nginx-secure:${{ github.sha }}
           format: table
           exit-code: "1"
