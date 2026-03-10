@@ -1,0 +1,3 @@
+# DevSecOps CI Python tooling dependencies.
+# Kept intentionally small for fast and reproducible lint jobs.
+ansible-lint>=24,<25

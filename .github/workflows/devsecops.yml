@@ -67,6 +67,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
 
       # ──────────────────────────────────────────────────────────────────────
       # INSTALL ANSIBLE-LINT
@@ -74,7 +76,7 @@ jobs:
       # can resolve module references (community.general, community.docker).
       # ──────────────────────────────────────────────────────────────────────
       - name: Install ansible-lint
-        run: pip install "ansible-lint>=24,<25"
+        run: pip install -r requirements-dev.txt
 
       - name: Install required Ansible collections
         run: |
