@@ -1,44 +1,298 @@
 # Secure Cloud DevSecOps Platform
 
-This project demonstrates a real-world DevSecOps platform combining:
+> A reference architecture and portfolio project demonstrating end-to-end DevSecOps practices on AWS — from infrastructure provisioning to container hardening and automated security checks.
 
-- Terraform Infrastructure as Code
-- Ansible configuration management
-- Docker container deployment
-- Secure CI/CD pipelines
-- Infrastructure and container security practices
+---
 
-## Architecture
+## Table of Contents
 
-The platform provisions secure AWS infrastructure using Terraform and configures instances using Ansible.
+1. [Project Overview](#project-overview)
+2. [Objectives](#objectives)
+3. [Architecture Overview](#architecture-overview)
+4. [Project Structure](#project-structure)
+5. [DevSecOps Workflow](#devsecops-workflow)
+6. [Security Practices Implemented](#security-practices-implemented)
+7. [Technologies Used](#technologies-used)
+8. [How to Use Locally](#how-to-use-locally)
+9. [Future Improvements](#future-improvements)
+10. [Author](#author)
 
-Key components:
+---
 
-- VPC with public and private subnets
-- EC2 instance with hardened configuration
-- Docker container running a secure NGINX service
-- CI/CD pipeline with security scanning
+## Project Overview
+
+**secure-cloud-devsecops-platform** is a portfolio-grade reference project that integrates industry-standard DevSecOps tooling into a single, cohesive platform. It covers the full lifecycle of a secure cloud deployment:
+
+- Infrastructure as Code with Terraform
+- Server configuration management and OS hardening with Ansible
+- Containerised application delivery via a hardened Docker/NGINX setup
+- Continuous security validation through a GitHub Actions CI pipeline with Trivy scanning
+
+> **Note:** This project is designed as a reference architecture and learning resource. Basic local validation (Terraform syntax checks, Ansible linting, Docker builds) does not require a live AWS account.
+
+---
+
+## Objectives
+
+- Demonstrate security-first thinking at every layer of the stack
+- Provide a realistic, end-to-end DevSecOps workflow that can serve as a template for production workloads
+- Show how open-source tooling (Terraform, Ansible, Docker, Trivy) can be combined into an automated security pipeline
+- Serve as a portfolio reference for DevSecOps engineering practices
+
+---
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    AWS Account                      │
+│                                                     │
+│  ┌──────────────────────────────────────────────┐   │
+│  │                    VPC                       │   │
+│  │  ┌──────────────────────────────────────┐    │   │
+│  │  │          Public Subnet               │    │   │
+│  │  │  ┌───────────────────────────────┐   │    │   │
+│  │  │  │  EC2 Instance (Ubuntu)        │   │    │   │
+│  │  │  │  ├─ Docker                    │   │    │   │
+│  │  │  │  │   └─ NGINX (hardened)      │   │    │   │
+│  │  │  │  ├─ CloudWatch Agent          │   │    │   │
+│  │  │  │  └─ SSM Agent (no SSH)        │   │    │   │
+│  │  │  └───────────────────────────────┘   │    │   │
+│  │  │  Security Group: 443 out / deny in   │    │   │
+│  │  └──────────────────────────────────────┘    │   │
+│  │  VPC Flow Logs → CloudWatch Logs (KMS)       │   │
+│  └──────────────────────────────────────────────┘   │
+│  KMS CMK — EBS encryption + CloudWatch encryption   │
+└─────────────────────────────────────────────────────┘
+```
+
+**Key design decisions:**
+
+| Decision | Rationale |
+|---|---|
+| IMDSv2 enforced | Prevents SSRF-based metadata credential theft |
+| SSM instead of SSH | Eliminates inbound port 22 attack surface |
+| Customer-managed KMS key | Full audit control over encryption lifecycle |
+| VPC Flow Logs | Full network visibility for incident response |
+| Non-root Docker container | Reduces blast radius of container compromise |
+
+---
+
+## Project Structure
+
+```
+secure-cloud-devsecops-platform/
+│
+├── .github/
+│   └── workflows/
+│       └── devsecops.yml          # GitHub Actions CI/CD pipeline
+│
+├── terraform/
+│   ├── versions.tf                # Provider and Terraform version pinning
+│   ├── variables.tf               # All configurable inputs
+│   ├── main.tf                    # VPC, subnet, SG, EC2, EBS, CloudWatch, KMS
+│   ├── outputs.tf                 # Resource identifiers and log group names
+│   ├── user_data.sh.tpl           # EC2 bootstrap: installs CloudWatch Agent
+│   └── modules/                   # Reserved for reusable module extraction
+│
+├── ansible/
+│   ├── inventory/
+│   │   └── hosts.ini              # Example inventory (one Ubuntu server)
+│   ├── playbooks/
+│   │   ├── install-docker.yml     # Installs Docker from official APT repo
+│   │   ├── hardening.yml          # SSH hardening, fail2ban, UFW firewall
+│   │   └── deploy-nginx.yml       # Deploys hardened NGINX as Docker container
+│   └── roles/
+│       └── common/                # Reserved for shared role tasks
+│
+├── docker/
+│   └── nginx-secure/
+│       ├── Dockerfile             # Minimal Alpine image, non-root runtime
+│       └── nginx.conf             # Hardened NGINX config with security headers
+│
+├── docs/                          # Extended documentation (diagrams, ADRs)
+├── security/                      # Security policies, findings, notes
+├── cicd/                          # Additional pipeline scripts or templates
+└── README.md
+```
+
+---
 
 ## DevSecOps Workflow
 
-1. Terraform provisions infrastructure
-2. Ansible configures and hardens servers
-3. Docker deploys the application
-4. CI/CD pipeline runs security checks
+Every push or pull request triggers the **GitHub Actions pipeline** defined in `.github/workflows/devsecops.yml`. The pipeline runs the following stages in sequence:
 
-## Security Features
+```
+┌──────────────┐   ┌───────────────────┐   ┌─────────────────┐   ┌──────────────────┐
+│  Checkout    │──▶│ Terraform Checks  │──▶│  Ansible Lint   │──▶│  Docker + Trivy  │
+└──────────────┘   └───────────────────┘   └─────────────────┘   └──────────────────┘
+                   • fmt -check             • ansible-lint         • docker build
+                   • init -backend=false    • community.general    • Trivy CVE scan
+                   • validate              • community.docker      • fail on HIGH/CRIT
+```
 
-- Least privilege IAM roles
-- Encrypted storage
-- Container vulnerability scanning
-- Linux hardening
-- Secure NGINX configuration
+### Stage details
 
-## Technologies
+**Terraform checks**
+```bash
+terraform fmt -check -recursive
+terraform init -backend=false
+terraform validate
+```
 
-- Terraform
-- Ansible
-- Docker
-- AWS
-- GitHub Actions
-- Trivy security scanning
+**Ansible lint**
+```bash
+ansible-galaxy collection install community.general community.docker
+ansible-lint ansible/playbooks/*.yml
+```
+
+**Docker build + Trivy scan**
+```bash
+# Build the hardened NGINX image
+docker build -t nginx-secure:${{ github.sha }} docker/nginx-secure/
+
+# Scan for unfixed CRITICAL and HIGH CVEs
+trivy image --exit-code 1 --ignore-unfixed --severity CRITICAL,HIGH nginx-secure:${{ github.sha }}
+```
+
+---
+
+## Security Practices Implemented
+
+### Infrastructure (Terraform)
+- **IMDSv2 required** — blocks SSRF attacks against EC2 metadata endpoint
+- **EBS encryption at rest** using a customer-managed KMS key with automatic key rotation
+- **CloudWatch log groups encrypted** with the same CMK; explicit key policy scoped to the Logs service principal
+- **VPC Flow Logs** capturing all traffic (`ALL`) for audit and incident response
+- **Least-privilege IAM roles** — EC2 instance profile grants only `CloudWatchAgentServerPolicy` and `AmazonSSMManagedInstanceCore`
+- **No inbound SSH** — instance is managed exclusively via AWS Systems Manager Session Manager
+
+### OS hardening (Ansible)
+- Disable root SSH login (`PermitRootLogin no`)
+- Disable password authentication (`PasswordAuthentication no`)
+- Install and enable `fail2ban` for brute-force protection
+- UFW firewall with default-deny inbound, allow only OpenSSH / HTTP / HTTPS
+- Full system package upgrade on first run
+
+### Container security (Docker + NGINX)
+- Base image: `nginx:1.27-alpine` (minimal attack surface)
+- Container runs as unprivileged user `101:101` (not root)
+- Default NGINX config removed; only the hardened config is present
+- NGINX security headers:
+  - `X-Content-Type-Options: nosniff`
+  - `X-Frame-Options: DENY`
+  - `Content-Security-Policy` with strict allowlist
+  - `Referrer-Policy: strict-origin-when-cross-origin`
+  - `Permissions-Policy` disabling camera / microphone / geolocation
+- Server version disclosure disabled (`server_tokens off`)
+- Timeouts and body size limits to reduce abuse surface
+- Hidden file access blocked (dotfiles)
+
+### CI/CD pipeline (GitHub Actions)
+- Pinned action versions (no floating `@main`)
+- `permissions: contents: read` — minimal GITHUB_TOKEN scope
+- Trivy scan fails the pipeline on any unfixed CRITICAL or HIGH CVE
+- Docker layer cache via GitHub Actions cache backend
+
+---
+
+## Technologies Used
+
+| Tool | Version | Purpose |
+|---|---|---|
+| Terraform | ≥ 1.5 | AWS infrastructure provisioning |
+| AWS Provider | ~5.0 | VPC, EC2, EBS, IAM, CloudWatch, KMS |
+| Ansible | Latest stable | Server configuration and OS hardening |
+| ansible-lint | ≥ 24 | Ansible best-practice enforcement |
+| Docker | Latest | Container runtime |
+| NGINX | 1.27-alpine | Hardened web server / reverse proxy |
+| GitHub Actions | — | CI/CD orchestration |
+| Trivy | 0.30+ | Container vulnerability scanning |
+| Python | 3.12 | Ansible toolchain runtime |
+
+---
+
+## How to Use Locally
+
+> No AWS account is required for local validation steps.
+
+### Prerequisites
+
+```bash
+# Install Terraform (https://developer.hashicorp.com/terraform/install)
+terraform -version   # >= 1.5.0
+
+# Install Ansible and ansible-lint
+pip install "ansible-lint>=24,<25"
+ansible-galaxy collection install community.general community.docker
+
+# Install Docker (https://docs.docker.com/engine/install/)
+docker info
+```
+
+### 1 — Validate Terraform
+
+```bash
+cd terraform/
+terraform fmt -check -recursive
+terraform init -backend=false
+terraform validate
+```
+
+### 2 — Lint Ansible playbooks
+
+```bash
+ansible-lint ansible/playbooks/*.yml
+```
+
+### 3 — Build and test the NGINX container
+
+```bash
+cd docker/nginx-secure/
+docker build -t nginx-secure:local .
+
+# Run locally and verify
+docker run --rm -p 8080:80 nginx-secure:local
+curl -I http://localhost:8080
+```
+
+### 4 — Run a Trivy security scan
+
+```bash
+# Install Trivy (https://aquasecurity.github.io/trivy/latest/getting-started/installation/)
+trivy image --severity CRITICAL,HIGH --ignore-unfixed nginx-secure:local
+```
+
+### 5 — Provision on AWS (optional)
+
+```bash
+cd terraform/
+# Configure AWS credentials before this step
+terraform init
+terraform plan
+terraform apply
+```
+
+---
+
+## Future Improvements
+
+- [ ] Add a private subnet and NAT Gateway for a fully private EC2 instance
+- [ ] Extract Terraform resources into reusable modules under `terraform/modules/`
+- [ ] Add HTTPS/TLS termination to the NGINX container with Let's Encrypt or ACM
+- [ ] Integrate **Checkov** or **tfsec** into the GitHub Actions pipeline for IaC static analysis
+- [ ] Add **OWASP ZAP** or **Nikto** dynamic scan stage to the pipeline
+- [ ] Configure remote Terraform state in S3 with DynamoDB locking
+- [ ] Add Ansible Vault integration for secrets management
+- [ ] Extend the pipeline with SBOM (Software Bill of Materials) generation via Trivy
+
+---
+
+## Author
+
+Built and maintained as a DevSecOps portfolio reference project.  
+Contributions, questions, and feedback are welcome via GitHub Issues or Pull Requests.
+
+---
+
+*This project is for educational and portfolio purposes. Review all configurations before using in a production environment.*
