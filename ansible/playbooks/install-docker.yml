@@ -4,24 +4,20 @@
 #   ansible-playbook -i ansible/inventory/hosts.ini ansible/playbooks/install-docker.yml
 # Optional override:
 #   -e docker_admin_user=smail
-
 - name: Install and Configure Docker on Ubuntu
   hosts: ubuntu_servers
   become: true
   gather_facts: true
-
   vars:
     # Configurable user that will be added to the docker group.
     # Defaults to the SSH connection user from inventory.
     docker_admin_user: "{{ ansible_user | default('ubuntu') }}"
-
   tasks:
     - name: Ensure target OS is Ubuntu
       ansible.builtin.assert:
         that:
           - ansible_facts.distribution == "Ubuntu"
         fail_msg: "This playbook supports Ubuntu only."
-
     - name: Install Docker APT prerequisites
       ansible.builtin.apt:
         name:
@@ -31,19 +27,16 @@
           - lsb-release
         state: present
         update_cache: true
-
     - name: Ensure keyrings directory exists
       ansible.builtin.file:
         path: /etc/apt/keyrings
         state: directory
         mode: "0755"
-
     - name: Download Docker GPG key
       ansible.builtin.get_url:
         url: https://download.docker.com/linux/ubuntu/gpg
         dest: /etc/apt/keyrings/docker.asc
         mode: "0644"
-
     - name: Add Docker APT repository
       ansible.builtin.apt_repository:
         repo: >-
@@ -51,7 +44,6 @@
           https://download.docker.com/linux/ubuntu {{ ansible_facts.distribution_release }} stable
         filename: docker
         state: present
-
     - name: Install Docker packages
       ansible.builtin.apt:
         name:
@@ -62,27 +54,22 @@
           - docker-compose-plugin
         state: present
         update_cache: true
-
     - name: Ensure Docker service is enabled and running
       ansible.builtin.service:
         name: docker
         enabled: true
         state: started
-
     - name: Ensure docker group exists
       ansible.builtin.group:
         name: docker
         state: present
-
     - name: Add configured user to docker group
       ansible.builtin.user:
         name: "{{ docker_admin_user }}"
         groups: docker
         append: true
-
     - name: Inform user about group membership refresh
       ansible.builtin.debug:
         msg: >-
           User '{{ docker_admin_user }}' added to docker group.
           Re-login is required for group membership to apply.
-

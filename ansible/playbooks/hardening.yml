@@ -2,34 +2,27 @@
 # Baseline host hardening for Ubuntu servers.
 # This playbook applies common controls for SSH exposure, firewalling,
 # brute-force protection, and patch management.
-
 - name: Harden Ubuntu Hosts
   hosts: ubuntu_servers
   become: true
   gather_facts: true
-  collections:
-    - community.general
-
   handlers:
     - name: Restart SSH service
       ansible.builtin.service:
         name: ssh
         state: restarted
-
   tasks:
     - name: Ensure target OS is Ubuntu
       ansible.builtin.assert:
         that:
           - ansible_facts.distribution == "Ubuntu"
         fail_msg: "This playbook supports Ubuntu only."
-
     - name: Update apt cache and upgrade all packages
       ansible.builtin.apt:
         update_cache: true
         upgrade: dist
         autoremove: true
         autoclean: true
-
     - name: Disable direct root SSH login
       ansible.builtin.lineinfile:
         path: /etc/ssh/sshd_config
@@ -39,7 +32,6 @@
         backup: true
         validate: /usr/sbin/sshd -t -f %s
       notify: Restart SSH service
-
     - name: Disable SSH password authentication
       ansible.builtin.lineinfile:
         path: /etc/ssh/sshd_config
@@ -49,47 +41,38 @@
         backup: true
         validate: /usr/sbin/sshd -t -f %s
       notify: Restart SSH service
-
     - name: Install fail2ban
       ansible.builtin.apt:
         name: fail2ban
         state: present
-
     - name: Ensure fail2ban is enabled and running
       ansible.builtin.service:
         name: fail2ban
         enabled: true
         state: started
-
     # Set default firewall policy first, then allow explicit services.
     - name: Set UFW default incoming policy to deny
       community.general.ufw:
         direction: incoming
         policy: deny
-
     - name: Set UFW default outgoing policy to allow
       community.general.ufw:
         direction: outgoing
         policy: allow
-
     - name: Allow OpenSSH through UFW
       community.general.ufw:
         rule: allow
         name: OpenSSH
-
     - name: Allow HTTP through UFW
       community.general.ufw:
         rule: allow
         port: "80"
         proto: tcp
-
     - name: Allow HTTPS through UFW
       community.general.ufw:
         rule: allow
         port: "443"
         proto: tcp
-
     - name: Enable UFW
       community.general.ufw:
         state: enabled
-
