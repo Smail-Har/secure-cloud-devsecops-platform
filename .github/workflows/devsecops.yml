@@ -78,6 +78,12 @@ jobs:
       - name: Install ansible-lint
         run: pip install -r requirements-dev.txt
 
+      - name: Show Ansible tool versions
+        run: |
+          python --version
+          ansible --version
+          ansible-lint --version
+
       - name: Install required Ansible collections
         run: |
           ansible-galaxy collection install \
