@@ -124,9 +124,16 @@ jobs:
       # ──────────────────────────────────────────────────────────────────────
       - name: Scan Docker image with Trivy (containerized fallback)
         run: |
+          TRIVY_IMAGE="aquasec/trivy:0.56.2"
+          if ! docker pull "${TRIVY_IMAGE}"; then
+            echo "Pinned Trivy image not available, falling back to latest."
+            TRIVY_IMAGE="aquasec/trivy:latest"
+            docker pull "${TRIVY_IMAGE}"
+          fi
+
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy:v0.56.2 image \
+            "${TRIVY_IMAGE}" image \
             --severity CRITICAL,HIGH \
             --ignore-unfixed \
             --exit-code 1 \
