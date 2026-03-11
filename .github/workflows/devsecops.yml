@@ -127,7 +127,7 @@ jobs:
         with:
           # Pin Trivy engine version for reproducible CI and to avoid
           # transient installer failures on newest upstream releases.
-          version: "0.56.2"
+          version: "v0.56.2"
           image-ref: nginx-secure:${{ github.sha }}
           format: table
           exit-code: "1"
