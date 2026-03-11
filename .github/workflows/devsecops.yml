@@ -122,15 +122,13 @@ jobs:
       # Scan the built image for known CVEs.
       # Fails the pipeline on any unfixed CRITICAL or HIGH findings.
       # ──────────────────────────────────────────────────────────────────────
-      - name: Scan Docker image with Trivy
-        uses: aquasecurity/trivy-action@0.30.0
-        with:
-          # Pin Trivy engine version for reproducible CI and to avoid
-          # transient installer failures on newest upstream releases.
-          version: "v0.56.2"
-          image-ref: nginx-secure:${{ github.sha }}
-          format: table
-          exit-code: "1"
-          ignore-unfixed: true
-          vuln-type: os,library
-          severity: CRITICAL,HIGH
+      - name: Scan Docker image with Trivy (containerized fallback)
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:v0.56.2 image \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            --exit-code 1 \
+            --vuln-type os,library \
+            nginx-secure:${{ github.sha }}
