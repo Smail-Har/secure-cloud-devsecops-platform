@@ -151,8 +151,15 @@ ansible-lint ansible/playbooks/*.yml
 # Build the hardened NGINX image
 docker build -t nginx-secure:${{ github.sha }} docker/nginx-secure/
 
-# Scan for unfixed CRITICAL and HIGH CVEs
-trivy image --exit-code 1 --ignore-unfixed --severity CRITICAL,HIGH nginx-secure:${{ github.sha }}
+# Scan for unfixed CRITICAL and HIGH CVEs (same policy as CI)
+docker run --rm \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  aquasec/trivy:0.56.2 image \
+  --severity CRITICAL,HIGH \
+  --ignore-unfixed \
+  --exit-code 1 \
+  --pkg-types os,library \
+  nginx-secure:${{ github.sha }}
 ```
 
 ---
@@ -191,7 +198,7 @@ trivy image --exit-code 1 --ignore-unfixed --severity CRITICAL,HIGH nginx-secure
 ### CI/CD pipeline (GitHub Actions)
 - Pinned action versions (no floating `@main`)
 - `permissions: contents: read` — minimal GITHUB_TOKEN scope
-- Trivy scan fails the pipeline on any unfixed CRITICAL or HIGH CVE
+- Trivy scan runs in a pinned container image and fails the pipeline on unfixed CRITICAL or HIGH CVEs
 - Docker layer cache via GitHub Actions cache backend
 
 ---
@@ -207,7 +214,7 @@ trivy image --exit-code 1 --ignore-unfixed --severity CRITICAL,HIGH nginx-secure
 | Docker | Latest | Container runtime |
 | NGINX | 1.27-alpine | Hardened web server / reverse proxy |
 | GitHub Actions | — | CI/CD orchestration |
-| Trivy | 0.30+ | Container vulnerability scanning |
+| Trivy | 0.56.2 (container image) | Container vulnerability scanning |
 | Python | 3.12 | Ansible toolchain runtime |
 
 ---
@@ -259,8 +266,15 @@ curl -I http://localhost:8080
 ### 4 — Run a Trivy security scan
 
 ```bash
-# Install Trivy (https://aquasecurity.github.io/trivy/latest/getting-started/installation/)
-trivy image --severity CRITICAL,HIGH --ignore-unfixed nginx-secure:local
+# Use Trivy via Docker (same approach as CI workflow)
+docker run --rm \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  aquasec/trivy:0.56.2 image \
+  --severity CRITICAL,HIGH \
+  --ignore-unfixed \
+  --exit-code 1 \
+  --pkg-types os,library \
+  nginx-secure:local
 ```
 
 ### 5 — Provision on AWS (optional)
