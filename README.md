@@ -1,5 +1,7 @@
 # Secure Cloud DevSecOps Platform
 
+[![DevSecOps Pipeline](https://github.com/Smail-Har/secure-cloud-devsecops-platform/actions/workflows/devsecops.yml/badge.svg)](https://github.com/Smail-Har/secure-cloud-devsecops-platform/actions/workflows/devsecops.yml)
+
 > A reference architecture and portfolio project demonstrating end-to-end DevSecOps practices on AWS — from infrastructure provisioning to container hardening and automated security checks.
 
 ---
@@ -110,9 +112,19 @@ secure-cloud-devsecops-platform/
 │       ├── Dockerfile             # Minimal Alpine image, non-root runtime
 │       └── nginx.conf             # Hardened NGINX config with security headers
 │
-├── docs/                          # Extended documentation (diagrams, ADRs)
-├── security/                      # Security policies, findings, notes
-├── cicd/                          # Additional pipeline scripts or templates
+├── docs/
+│   ├── architecture.md            # Mermaid diagrams + deployment model
+│   ├── threat-model.md            # Assets, threats, mitigations
+│   └── adr-001-ci-security-gates.md  # Architecture Decision Record
+├── security/
+│   ├── security-controls.md       # Full controls register by layer
+│   ├── trivy-baseline.md          # CVE baseline and remediation log
+│   └── exceptions.md             # Exception register
+├── cicd/
+│   ├── pipeline-stages.md         # Stage-by-stage pipeline reference
+│   ├── quality-gates.md           # Merge gates and break-glass guidance
+│   └── local-ci.sh               # Bash script: full local CI run
+├── Makefile                       # make build / lint / scan / checkov
 └── README.md
 ```
 
@@ -123,12 +135,12 @@ secure-cloud-devsecops-platform/
 Every push or pull request triggers the **GitHub Actions pipeline** defined in `.github/workflows/devsecops.yml`. The pipeline runs the following stages in sequence:
 
 ```
-┌──────────────┐   ┌───────────────────┐   ┌─────────────────┐   ┌──────────────────┐
-│  Checkout    │──▶│ Terraform Checks  │──▶│  Ansible Lint   │──▶│  Docker + Trivy  │
-└──────────────┘   └───────────────────┘   └─────────────────┘   └──────────────────┘
-                   • fmt -check             • ansible-lint         • docker build
-                   • init -backend=false    • community.general    • Trivy CVE scan
-                   • validate              • community.docker      • fail on HIGH/CRIT
+┌──────────┐  ┌──────────┐  ┌────────────────────┐  ┌──────────┐  ┌────────────────┐
+│ Checkout │─▶│ Gitleaks │─▶│ Terraform + Checkov│─▶│ Ansible  │─▶│ Docker + Trivy │
+└──────────┘  └──────────┘  └────────────────────┘  │ Lint     │  └────────────────┘
+              • secrets         • fmt -check          └──────────┘  • docker build
+              • full history    • init · validate     • ansible-    • Trivy CVE scan
+              • exit 1          • Checkov IaC scan      lint        • fail HIGH/CRIT
 ```
 
 ### Stage details
@@ -215,6 +227,8 @@ docker run --rm \
 | NGINX | 1.27-alpine | Hardened web server / reverse proxy |
 | GitHub Actions | — | CI/CD orchestration |
 | Trivy | 0.56.2 (container image) | Container vulnerability scanning |
+| Checkov | Latest (bridgecrew/checkov-action@v12) | Terraform IaC misconfiguration scanning |
+| Gitleaks | v8.21.2 (container image) | Secrets and credential detection in git history |
 | Python | 3.12 | Ansible toolchain runtime |
 
 ---
@@ -230,14 +244,30 @@ docker run --rm \
 terraform -version   # >= 1.5.0
 
 # Install Ansible and ansible-lint
-pip install "ansible-lint>=24,<25"
+pip install -r requirements-dev.txt
 ansible-galaxy collection install community.general community.docker
 
 # Install Docker (https://docs.docker.com/engine/install/)
 docker info
 ```
 
-### 1 — Validate Terraform
+### Quick start with Make
+
+The `Makefile` reproduces the full CI pipeline locally:
+
+```bash
+make          # full sequence: tf-check → lint → build → scan
+make tf-check # terraform fmt + init + validate
+make lint     # ansible-lint on all playbooks
+make build    # docker build nginx-secure:local
+make scan     # Trivy CVE scan (mirrors CI policy)
+make checkov  # Checkov IaC scan on terraform/ (informational)
+make clean    # remove local docker image
+```
+
+### Step by step
+
+#### 1 — Validate Terraform
 
 ```bash
 cd terraform/
@@ -246,27 +276,25 @@ terraform init -backend=false
 terraform validate
 ```
 
-### 2 — Lint Ansible playbooks
+#### 2 — Lint Ansible playbooks
 
 ```bash
 ansible-lint ansible/playbooks/*.yml
 ```
 
-### 3 — Build and test the NGINX container
+#### 3 — Build and test the NGINX container
 
 ```bash
-cd docker/nginx-secure/
-docker build -t nginx-secure:local .
+docker build -t nginx-secure:local docker/nginx-secure/
 
 # Run locally and verify
 docker run --rm -p 8080:80 nginx-secure:local
 curl -I http://localhost:8080
 ```
 
-### 4 — Run a Trivy security scan
+#### 4 — Run a Trivy security scan
 
 ```bash
-# Use Trivy via Docker (same approach as CI workflow)
 docker run --rm \
   -v /var/run/docker.sock:/var/run/docker.sock \
   aquasec/trivy:0.56.2 image \
@@ -277,7 +305,7 @@ docker run --rm \
   nginx-secure:local
 ```
 
-### 5 — Provision on AWS (optional)
+#### 5 — Provision on AWS (optional)
 
 ```bash
 cd terraform/
@@ -294,11 +322,12 @@ terraform apply
 - [ ] Add a private subnet and NAT Gateway for a fully private EC2 instance
 - [ ] Extract Terraform resources into reusable modules under `terraform/modules/`
 - [ ] Add HTTPS/TLS termination to the NGINX container with Let's Encrypt or ACM
-- [ ] Integrate **Checkov** or **tfsec** into the GitHub Actions pipeline for IaC static analysis
+- [ ] Add a `.checkov.yaml` config to suppress accepted exceptions and switch Checkov to `soft_fail: false`
 - [ ] Add **OWASP ZAP** or **Nikto** dynamic scan stage to the pipeline
 - [ ] Configure remote Terraform state in S3 with DynamoDB locking
 - [ ] Add Ansible Vault integration for secrets management
 - [ ] Extend the pipeline with SBOM (Software Bill of Materials) generation via Trivy
+- [ ] Add **Semgrep** SAST scan for Ansible playbooks and configuration files
 
 ---
 

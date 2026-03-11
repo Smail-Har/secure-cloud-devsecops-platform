@@ -3,7 +3,8 @@
 #
 # Runs on every push and pull request.
 # Stages:
-#   1. Terraform validation (fmt, init, validate)
+#   0. Gitleaks — secrets and credential detection (full git history)
+#   1. Terraform validation (fmt, init, validate) + Checkov IaC scan
 #   2. Ansible lint
 #   3. Docker image build + Trivy vulnerability scan
 
@@ -27,10 +28,28 @@ jobs:
     steps:
       # ──────────────────────────────────────────────────────────────────────
       # CHECKOUT
-      # Full clone so tools can inspect all tracked files.
+      # Full history (fetch-depth: 0) is required by Gitleaks to scan all
+      # commits, not just the latest snapshot.
       # ──────────────────────────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ──────────────────────────────────────────────────────────────────────
+      # SECRETS DETECTION
+      # Gitleaks scans the entire commit history for accidentally committed
+      # credentials, API keys, tokens, and other secrets.
+      # Runs before all other steps — secrets found here block the pipeline.
+      # ──────────────────────────────────────────────────────────────────────
+      - name: Detect secrets with Gitleaks
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/workspace:ro" \
+            ghcr.io/gitleaks/gitleaks:v8.21.2 detect \
+            --source /workspace \
+            --redact \
+            --exit-code 1
 
       # ──────────────────────────────────────────────────────────────────────
       # SETUP TERRAFORM
@@ -58,6 +77,21 @@ jobs:
       - name: Terraform validate
         working-directory: terraform
         run: terraform validate
+
+      # ──────────────────────────────────────────────────────────────────────
+      # IAC SECURITY SCAN
+      # Checkov analyses Terraform code against 1000+ security policies
+      # (CIS Benchmarks, NIST, AWS Security Hub).
+      # soft_fail: true — findings are reported but do not block the pipeline.
+      # Tighten to soft_fail: false once known intentional shortcuts are
+      # documented as suppressed checks in a .checkov.yaml config file.
+      # ──────────────────────────────────────────────────────────────────────
+      - name: IaC scan with Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: terraform/
+          framework: terraform
+          soft_fail: true
 
       # ──────────────────────────────────────────────────────────────────────
       # SETUP PYTHON

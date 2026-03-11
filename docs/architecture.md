@@ -2,6 +2,45 @@
 
 This project demonstrates a security-first DevSecOps reference architecture for AWS.
 
+## Pipeline Flow
+
+```mermaid
+flowchart LR
+    A([Push / PR]) --> B[Gitleaks\nSecrets Scan]
+    B --> C[Terraform\nfmt · init · validate]
+    C --> D[Checkov\nIaC Scan]
+    D --> E[Ansible\nLint]
+    E --> F[Docker\nBuild]
+    F --> G[Trivy\nCVE Scan]
+    G --> H{Pass?}
+    H -- Yes --> I([Merge allowed])
+    H -- No  --> J([Pipeline fails])
+
+    style B fill:#e74c3c,color:#fff
+    style D fill:#e67e22,color:#fff
+    style G fill:#e74c3c,color:#fff
+```
+
+## AWS Deployment
+
+```mermaid
+graph TD
+    subgraph AWS["AWS Account"]
+        subgraph VPC["VPC + Public Subnet"]
+            EC2["EC2 Ubuntu\n(IMDSv2 enforced)"]
+            EC2 --> Docker["Docker"]
+            Docker --> NGINX["NGINX\nnon-root 101:101"]
+        end
+        EC2 <-->|"No SSH\n(port 22 closed)"| SSM["SSM Session Manager"]
+        EC2 --> CW["CloudWatch Logs\n(KMS encrypted)"]
+        EBS["EBS Volume\n(KMS encrypted)"] --- EC2
+        FL["VPC Flow Logs"] --> CW
+    end
+
+    style AWS fill:#1a1a2e,color:#eee
+    style VPC fill:#16213e,color:#eee
+```
+
 ## Scope
 
 - Provision cloud infrastructure with Terraform
